@@ -1,0 +1,85 @@
+# =====================================================================
+# RGA Financial Copilot / PHI OMEGA — production-shaped compose
+#
+# Phase 0: this file declares the SHAPE of the runtime topology.
+# It does NOT build images yet — services point at placeholder Dockerfiles
+# that will land in Phase 1+. `docker compose up` will fail until then;
+# that is intentional.
+#
+# Use docker-compose.dev.yml for local development overrides.
+# =====================================================================
+
+services:
+  api:
+    image: rga/api:${APP_VERSION:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      APP_ENV: production
+    depends_on:
+      - redis
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    image: rga/api:${APP_VERSION:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      APP_ENV: production
+      ROLE: worker
+    command: ["python", "-m", "rga.jobs.worker"]
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  scheduler:
+    image: rga/api:${APP_VERSION:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      APP_ENV: production
+      ROLE: scheduler
+    command: ["python", "-m", "rga.jobs.scheduler"]
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  web:
+    image: rga/web:${APP_VERSION:-latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+
+# Note: Postgres is Supabase-managed, not local. Do not add a `postgres`
+# service to this file — see docs/DEPLOYMENT.md.

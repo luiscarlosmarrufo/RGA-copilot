@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/luiscarlosmarrufopadilla/Developer/RGA-copilot ls-files)",
+      "Bash(awk -F, 'NR==1{for\\(i=1;i<=NF;i++\\)print i\": \"$i}' '/Users/luiscarlosmarrufopadilla/Developer/RGA-copilot/data/private/TEC SG 2 - Grupo Nama \\(Interno\\) - BD 2026.csv')",
+      "Bash(awk -F, 'NR==1{for\\(i=1;i<=NF;i++\\)print i\": \"$i}' '/Users/luiscarlosmarrufopadilla/Developer/RGA-copilot/data/private/SG - Cliente 2025 - BD 2025.csv')",
+      "Bash(awk -F',' 'NR>1{print $3}' \"/Users/luiscarlosmarrufopadilla/Developer/RGA-copilot/data/private/TEC SG 2 - Grupo Nama \\(Interno\\) - BD 2026.csv\")",
+      "Bash(awk -F',' 'NR>1{print $1}' \"/Users/luiscarlosmarrufopadilla/Developer/RGA-copilot/data/private/TEC SG 2 - Grupo Nama \\(Interno\\) - BD 2026.csv\")"
+    ]
+  }
+}

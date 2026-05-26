@@ -1,0 +1,36 @@
+cat > .gitignore <<'EOF'
+# Environment
+.env
+.env.*
+!.env.example
+
+# Private client data
+data/private/
+data/raw/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Next
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+EOF

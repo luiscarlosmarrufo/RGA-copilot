@@ -1,0 +1,52 @@
+# =====================================================================
+# Dev overrides. Run with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Phase 0: placeholders. No Dockerfiles exist yet; this file documents
+# the intended dev workflow.
+# =====================================================================
+
+services:
+  api:
+    build:
+      target: dev
+    command: ["uvicorn", "rga.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      APP_ENV: development
+      APP_LOG_LEVEL: debug
+    volumes:
+      - ./backend:/app
+      - /app/.venv          # keep container venv
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      target: dev
+    command: ["python", "-m", "rga.jobs.worker", "--reload"]
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+
+  scheduler:
+    build:
+      target: dev
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+
+  web:
+    build:
+      target: dev
+    command: ["npm", "run", "dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+  # Local-only helper: an Adminer/pgweb-style explorer is optional and
+  # left commented because the real DB is Supabase. Use the Supabase
+  # Studio in the dashboard for schema work.
