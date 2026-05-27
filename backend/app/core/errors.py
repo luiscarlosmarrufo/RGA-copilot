@@ -74,3 +74,13 @@ class EncodingError(DataParserError):
 
 class UnsupportedFormatError(DataParserError):
     code = "unsupported_format"
+
+
+class DatasetScopeError(DataParserError):
+    """Raised by analytics when a DataFrame contains rows from a forbidden scope.
+
+    Surfaces ADR-0012: NAMA analysis runs must never aggregate the 2025
+    reference data (or any other scope) silently.
+    """
+
+    code = "dataset_scope_violation"

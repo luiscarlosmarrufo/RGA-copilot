@@ -132,11 +132,23 @@ Detailed DDL lands in Phase 3 migrations. Tables and the contracts they store:
 
 ## 6. Deterministic JSON contract for the LLM
 
-Block 2 of the 5-block prompt is a single JSON object with this shape (target — finalized in Phase 5):
+Block 2 of the 5-block prompt is a single JSON object. Two top-level metadata fields are mandatory on every result, propagated end-to-end from the parser (Phase 2):
+
+- **`dataset_scope`** — string. Identifies which client + study the numbers belong to. Default and only-allowed-in-NAMA-runs value is `"nama_2026"`. The 2025 reference workbook is `"reference_2025"` and is never aggregated with NAMA data (ADR-0012). Analytics functions that consume a DataFrame call a `assert_nama_only` guard before computing; mixing scopes raises a typed error.
+- **`period_coverage`** — object with `declared`, `actual`, and `missing` arrays of month strings (e.g. `"ENERO 2026"`). `declared` is the formally declared study window; `actual` is what the data contains; `missing = declared - actual`. When `missing` is non-empty, analytics emit a `missing_periods` warning that propagates to the UI, the report, and this prompt block. The model is instructed to treat missing months as absent — **never infer over them**. (ADR-0013)
+
+Current declared window: `["ENERO 2026", "FEBRERO 2026", "MARZO 2026", "ABRIL 2026"]`. While Abril remains unavailable, the study is formally narrowed to Q1 2026 and `missing = ["ABRIL 2026"]` is surfaced on every result.
+
+Block 2 shape (target — finalized in Phase 5):
 
 ```json
 {
-  "period": "ENERO 2026 — MARZO 2026",
+  "dataset_scope": "nama_2026",
+  "period_coverage": {
+    "declared": ["ENERO 2026", "FEBRERO 2026", "MARZO 2026", "ABRIL 2026"],
+    "actual":   ["ENERO 2026", "FEBRERO 2026", "MARZO 2026"],
+    "missing":  ["ABRIL 2026"]
+  },
   "client": { "id": "...", "nombre": "Grupo NAMA" },
   "sucursales": [
     {
@@ -152,8 +164,11 @@ Block 2 of the 5-block prompt is a single JSON object with this shape (target �
   ],
   "market": {
     "ANT": { "competitive_index": 0.97, "sentiment_score": 0.71, "review_velocity_7d": 4 }
-  }
+  },
+  "warnings": [
+    { "code": "missing_periods", "missing": ["ABRIL 2026"] }
+  ]
 }
 ```
 
-Claude is told, in the system block, that **every number in its reply must come from this JSON**.
+Claude is told, in the system block, that **every number in its reply must come from this JSON**, and that **months in `missing` do not exist for the purposes of this conversation**.

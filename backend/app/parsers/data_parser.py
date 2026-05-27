@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import IO
@@ -34,6 +35,11 @@ from app.core.errors import (
     RatioOutOfRangeError,
 )
 from app.schemas.parser import ParseResult
+
+# Canonical dataset scopes. The analytics layer guards against mixing them.
+DEFAULT_DATASET_SCOPE = "nama_2026"
+REFERENCE_DATASET_SCOPE = "reference_2025"
+DATASET_SCOPE_COLUMN = "dataset_scope"
 
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "MES",
@@ -74,32 +80,80 @@ def _nfc(value: str) -> str:
     return unicodedata.normalize("NFC", value)
 
 
+@dataclass(frozen=True)
+class CleanedDataset:
+    """Internal carrier: cleaned DataFrame plus its public summary.
+
+    Analytics functions consume `dataframe` directly. The API layer returns
+    only `summary` (which mirrors the JSON contract). The two are kept in
+    sync because they are produced by the same call.
+    """
+
+    dataframe: pd.DataFrame
+    summary: ParseResult
+    dataset_scope: str
+
+
 class DataParser:
     """Parser for RGA workbooks.
 
     Construction is parameterless on purpose; per-call options live on the
-    `parse_*` methods so the parser can be reused across requests.
+    `parse_*` / `load_*` methods so the parser can be reused across requests.
+
+    Two public surfaces:
+
+    - ``parse_csv`` / ``parse_excel`` return only the JSON-shaped summary
+      (`ParseResult`). The API layer uses these.
+    - ``load_csv`` / ``load_excel`` return a `CleanedDataset` — the cleaned
+      DataFrame plus the same summary. The analytics layer uses these.
     """
 
-    # ----- public entry points ----------------------------------------
+    # ----- summary-only entry points (API layer) ----------------------
 
-    def parse_csv(self, source: CsvSource) -> ParseResult:
-        df = self._read_csv(source)
-        return self._process(df, sheet_resolved=None)
+    def parse_csv(
+        self,
+        source: CsvSource,
+        *,
+        dataset_scope: str = DEFAULT_DATASET_SCOPE,
+    ) -> ParseResult:
+        return self.load_csv(source, dataset_scope=dataset_scope).summary
 
     def parse_excel(
         self,
         source: ExcelSource,
         *,
         sheet_name: str = CANONICAL_SHEET_NAME,
+        dataset_scope: str = DEFAULT_DATASET_SCOPE,
     ) -> ParseResult:
+        return self.load_excel(
+            source, sheet_name=sheet_name, dataset_scope=dataset_scope
+        ).summary
+
+    # ----- DataFrame-bearing entry points (analytics layer) -----------
+
+    def load_csv(
+        self,
+        source: CsvSource,
+        *,
+        dataset_scope: str = DEFAULT_DATASET_SCOPE,
+    ) -> CleanedDataset:
+        df = self._read_csv(source)
+        return self._process(df, sheet_resolved=None, dataset_scope=dataset_scope)
+
+    def load_excel(
+        self,
+        source: ExcelSource,
+        *,
+        sheet_name: str = CANONICAL_SHEET_NAME,
+        dataset_scope: str = DEFAULT_DATASET_SCOPE,
+    ) -> CleanedDataset:
         if not sheet_name:
             raise DataParserError(
                 "sheet_name must be provided; the parser never defaults to sheet index 0",
                 details={"reason": "empty_sheet_name"},
             )
         df = self._read_excel(source, sheet_name=sheet_name)
-        return self._process(df, sheet_resolved=sheet_name)
+        return self._process(df, sheet_resolved=sheet_name, dataset_scope=dataset_scope)
 
     # ----- IO ----------------------------------------------------------
 
@@ -128,7 +182,13 @@ class DataParser:
 
     # ----- pipeline ----------------------------------------------------
 
-    def _process(self, df: pd.DataFrame, *, sheet_resolved: str | None) -> ParseResult:
+    def _process(
+        self,
+        df: pd.DataFrame,
+        *,
+        sheet_resolved: str | None,
+        dataset_scope: str,
+    ) -> CleanedDataset:
         warnings: list[str] = []
 
         df, header_warnings = self._normalize_headers(df)
@@ -150,9 +210,13 @@ class DataParser:
         if dropped_zero:
             warnings.append(f"Dropped {dropped_zero} row(s) where TOTAL == 0")
 
+        # Stamp the scope on every row. Analytics functions guard on this.
+        df[DATASET_SCOPE_COLUMN] = dataset_scope
+
         cleaned_preview = self._records_preview(df, PREVIEW_ROWS)
 
-        return ParseResult(
+        summary = ParseResult(
+            dataset_scope=dataset_scope,
             sheet_resolved=sheet_resolved,
             row_count_original=row_count_original,
             row_count_cleaned=len(df),
@@ -162,6 +226,7 @@ class DataParser:
             cleaned_data_preview=cleaned_preview,
             warnings=warnings,
         )
+        return CleanedDataset(dataframe=df, summary=summary, dataset_scope=dataset_scope)
 
     # ----- steps -------------------------------------------------------
 

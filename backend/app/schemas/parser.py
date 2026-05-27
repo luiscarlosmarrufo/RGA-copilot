@@ -12,6 +12,7 @@ class ParseResult(BaseModel):
     phases extend this model with persistence ids; never break field names.
     """
 
+    dataset_scope: str
     sheet_resolved: str | None = None
     row_count_original: int
     row_count_cleaned: int

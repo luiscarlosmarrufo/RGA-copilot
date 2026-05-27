@@ -74,37 +74,43 @@ Status legend: ` ` todo · `~` in progress · `x` done · `-` cut/deferred.
 **Deliverables**
 
 *Data scoping & coverage metadata*
-- [ ] Thread `dataset_scope` from the parser output (Phase 1 `ParseResult`) into every analytics input and output. Default scope `nama_2026`; the 2025 reference CSV is `reference_2025` and is opted into explicitly. (ADR-0012)
-- [ ] Implement **period coverage validation**: every analytics result carries `period_coverage = { declared: [...], actual: [...], missing: [...] }`. The declared window for the current study is `ENERO 2026 … ABRIL 2026`; actual is whatever the data contains. (ADR-0013)
-- [ ] Emit a **missing-month warning** when `missing` is non-empty. The warning text is Spanish-ready (English internal code, Spanish surface copy via i18n in Phase 6). Propagate the warning through the analytics return value so downstream (UI, report, LLM prompt) all see it.
-- [ ] Reference-data **contamination guard**: a single function (`assert_nama_only(df)` or similar) that every NAMA analytics function calls. It raises a typed error if `dataset_scope != "nama_2026"` rows are present. Test that the guard fires on a mixed fixture.
-- [ ] Update [PRODUCT_SPEC.md](PRODUCT_SPEC.md) to reframe the current study as Q1 2026 (enero–marzo) until April arrives. (ADR-0013)
+- [x] Thread `dataset_scope` from the parser output (Phase 1 `ParseResult`) into every analytics input and output. Default scope `nama_2026`; the 2025 reference CSV is `reference_2025` and is opted into explicitly. Parser stamps a `dataset_scope` column on the cleaned DataFrame; ParseResult carries it as a field. (ADR-0012)
+- [x] Implement **period coverage validation** in `analytics/coverage.py` — `compute_period_coverage` returns `{declared, actual, missing, unexpected}`. (ADR-0013)
+- [x] Emit a **missing-month warning** via `missing_period_warning(coverage)` with payload `{code: "missing_periods", missing, declared, actual}`. Shape matches the LLM contract in [DATA_CONTRACTS.md](DATA_CONTRACTS.md) § 6.
+- [x] Reference-data **contamination guard** in `analytics/scope.py` (`assert_nama_only(df)`). Every NAMA analytics function calls it; mixed-scope frame raises `DatasetScopeError`. (ADR-0012)
+- [x] Update [PRODUCT_SPEC.md](PRODUCT_SPEC.md) to reframe the current study as Q1 2026 until April arrives.
 
 *Analytics modules (all deterministic)*
-- [ ] `analytics/margins.py` — utilidad bruta, margen bruto, cost leakage. Recomputed values compared to source values within tolerance.
-- [ ] `analytics/menu_engineering.py` — estrellas / caballos de batalla / puzzles / perros. Median computed per `(sucursal, period)`; strict `>=` on the volume axis.
-- [ ] `analytics/alerts.py` — five alert rules from [DATA_CONTRACTS.md](DATA_CONTRACTS.md) § 4, with severities and Spanish-ready message templates.
-- [ ] `analytics/sensitivity.py` — 5% input-cost shock.
-- [ ] `analytics/coverage.py` — period coverage + missing-month logic; consumed by every metric module.
-- [ ] All analytics modules expose **pure** `(DataFrame, params) → result` signatures. No I/O, no DB, no API calls.
+- [x] `analytics/margins.py` — `utilidad_bruta`, `margen_bruto`, `cost_leakage`, `cost_leakage_ratio`, `aggregate_margins_per_sucursal`. Recomputed values compared to source values within tolerance.
+- [x] `analytics/menu_engineering.py` — estrellas / caballos de batalla / puzzles / perros. Median computed per `(sucursal, period)` via `groupby.transform("median")`; strict `>=` on both axes.
+- [x] `analytics/alerts.py` — three deterministic financial alerts: `low_margin`, `profit_concentration` (MEDIUM / HIGH at 40% / 50%), `inefficient_line`. Maps and Trends alerts are intentionally deferred to Phase 4.
+- [x] `analytics/sensitivity.py` — `shock_costs(df, factor=1.05)` with recomputed `UTILIDAD BRUTA` and `MARGEN BRUTO`; input never mutated.
+- [x] `analytics/coverage.py` — period coverage + missing-month logic.
+- [x] All analytics modules expose **pure** `(DataFrame, params) → result` signatures. No I/O, no DB, no API calls.
 
 *Tests*
-- [ ] Golden-number tests for every metric.
-- [ ] Boundary tests on menu engineering quadrants (at-median cases).
-- [ ] Below / at / above tests on every alert threshold.
-- [ ] Period-coverage tests: declared = 4 months, actual = 3 months → missing warning present, value is `["ABRIL 2026"]`.
-- [ ] Contamination-guard tests: mixed-scope fixture raises; pure NAMA fixture passes.
-- [ ] Sensitivity tests: cost × 1.05 produces the expected new margin.
+- [x] Golden-number tests for every metric (`test_analytics_margins.py`, `test_analytics_sensitivity.py`).
+- [x] Boundary tests on menu engineering quadrants (at-median ties land on the HIGH side; `test_analytics_menu_engineering.py`).
+- [x] Strict-boundary tests on alert thresholds — both `low_margin` at exactly −5 pp and `inefficient_line` at exactly −2 pp do **not** fire, with float-precision guard (`_strictly_below_pp` rounds delta to 6 decimal pp).
+- [x] Period-coverage tests: declared = 4 months, actual = 3 months → missing warning surfaces `["ABRIL 2026"]`.
+- [x] Contamination-guard tests: mixed-scope fixture raises; pure NAMA fixture passes.
+- [x] Sensitivity tests: cost × 1.05 produces the expected new margin; negative factor rejected.
 
 *Documentation*
-- [ ] Update [DATA_CONTRACTS.md](DATA_CONTRACTS.md) § 6 to include `dataset_scope` and `period_coverage` on the deterministic JSON contract handed to the LLM in Phase 5.
+- [x] Update [DATA_CONTRACTS.md](DATA_CONTRACTS.md) § 6 to include `dataset_scope` and `period_coverage` on the deterministic JSON contract handed to the LLM in Phase 5.
 
 **Exit criteria**
-- Recomputed margins match source-provided margins within tolerance on the NAMA sample.
-- All alerts trigger correctly on synthetic edge cases.
-- Every analytics output includes `dataset_scope` and `period_coverage`.
-- Mixing `nama_2026` and `reference_2025` rows in a NAMA analysis run **always** raises (no silent contamination).
-- The Q1 framing is reflected in [PRODUCT_SPEC.md](PRODUCT_SPEC.md) and the missing-month warning is exercised by tests.
+- [x] Recomputed margins match source-provided margins exactly on the analytics sample (12 rows × 3 sucursales).
+- [x] All Phase 2 alerts trigger correctly on synthetic edge cases (strict-boundary tests + cleaned-fixture tests).
+- [x] Every analytics output includes `dataset_scope` (column on the DataFrame; field on ParseResult). `period_coverage` is computed on demand via `compute_period_coverage`; warning shape is finalized.
+- [x] Mixing `nama_2026` and `reference_2025` rows in a NAMA analysis run **always** raises (verified by `test_analytics_scope.py` and `test_scope_guard_blocks_reference_rows_in_margins`).
+- [x] Q1 framing reflected in [PRODUCT_SPEC.md](PRODUCT_SPEC.md); missing-month warning exercised by tests.
+
+**Phase 2 status:** complete. 58/58 tests green, ruff clean, mypy clean on 20 source files. Backend now runs under `uv` (`uv.lock` committed; canonical commands `uv sync`, `uv run pytest`, `uv run ruff check app tests`, `uv run mypy app`).
+
+**Carryover into Phase 3:**
+- The `period_coverage` payload is produced on demand by analytics callers; Phase 3 should persist it alongside `analysis_runs` so the UI and LLM prompt always see the same coverage snapshot.
+- Pandas 3.0 quirks bit Phase 1 (string dtype) and Phase 2 (`include_groups` removed from `groupby.apply`). Pin the major in pyproject when adding new dependencies; revisit if pandas 3.1 lands.
 
 ---
 

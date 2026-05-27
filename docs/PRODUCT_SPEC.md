@@ -11,6 +11,8 @@ Primary users:
 
 First real client: **Grupo NAMA** (Querétaro, Japanese restaurants, 4 NAMA sucursales + Soko Teppan).
 
+**Current study window: Q1 2026 (enero–marzo).** The original brief was enero–abril 2026, but the 2026 workbook delivered to date contains only ENERO–MARZO. Per ADR-0013, we do not impute the missing month. The MVP report and dashboard surface Q1 explicitly and carry a `period_coverage.missing = ["ABRIL 2026"]` warning everywhere a metric is rendered. When Abril data arrives, re-running the parser over the updated workbook widens the window automatically — no code changes required.
+
 ## 2. Product principles
 
 1. **Numbers are sacred.** Every figure in the UI traces back to a Python function operating on raw client data. No LLM-generated numbers.
